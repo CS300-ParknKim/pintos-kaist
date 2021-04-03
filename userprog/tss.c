@@ -8,7 +8,7 @@
 #include "intrinsic.h"
 
 /* The Task-State Segment (TSS).
- *
+ *  프로젝트에 직접 쓰이지는 않음.
  *  Instances of the TSS, an x86-64 specific structure, are used to
  *  define "tasks", a form of support for multitasking built right
  *  into the processor.  However, for various reasons including
