@@ -27,7 +27,7 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
-
+// 주석
 /*
  *  sleep_list          
  */
