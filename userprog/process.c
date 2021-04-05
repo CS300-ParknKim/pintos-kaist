@@ -47,6 +47,7 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
+	printf("process_create_initd\n");
 	char *fn_copy;
 	tid_t tid;
 
@@ -58,7 +59,13 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	//ex ) ls -l .c -> (ls, PRI_DEFAULT, initd, ls -l .c(fn_copy에 저장됨))
+	// now: thread_create(ls -l .c, PRI_DEFAULT, ~, ~)
+	char *p;
+	char *next_p;
+	p = strtok_r(file_name, " ", &next_p);
+
+	tid = thread_create (p, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -160,15 +167,13 @@ __do_fork (void *aux) {
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_);
+		do_iret (&if_); // CPU jump to RIP address
 error:
 	thread_exit ();
 }
 
 
 /* Switch the current execution context to the f_name.
-단순히 프로그램 파일 이름을 인수로 사용하는 대신 공백에서 단어로 나누도록 확장
-process_exec("grep foo bar")두 개의 인수 foo 및 bar를 전달하여 grep을 실행해야합니다.
 goal : grep(foo, bar)
 _start (int argc, char *argv[]) {
     exit (main (argc, argv));
@@ -176,35 +181,12 @@ _start (int argc, char *argv[]) {
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
+	printf("process_exec\n");
 	char *file_name = f_name;
 	bool success;
 
-/*
-	// argv[] 생성
-	char *argv[] = NULL;
-	// argv[0] 가리키는 포인터 & argv[0][...] type char[숫자]
-	int argc = 0;
-	
-	
-
-	char s1[COMMAND_SIZE];
-	strcpy(s1, file_name);
-
-    char *argv[0] = strtok(s1, " ");
-	
-	
-    while (ptr != NULL)               // 자른 문자열이 나오지 않을 때까지 반복
-    {
-		argc++;
-        //ptr을 argv 배열에 삽입하는 코드 작성
-		// int* arr[3] = {&num01, &num02, &num03}; // 주소를 대입  
-        ptr = strtok(NULL, " ");      // 다음 문자열을 잘라서 포인터를 반환
-    }
-
-	// _start (int argc, char *argv[]) 호출.
-*/
-
 	/* We cannot use the intr_frame in the thread structure.
+	 * 여기서 stack memory를 다루는건 아니었음
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
 	struct intr_frame _if;
@@ -224,7 +206,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* Start switched process. */
-	do_iret (&_if);
+	do_iret (&_if); // CPU jump to RIP address
 	NOT_REACHED ();
 }
 
@@ -243,7 +225,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	return -1;
+	printf("process_wait\n");
+	while(true){	}
+	return -1;//pintos 종료
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -361,12 +345,21 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	printf("process_load\n");
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
 	off_t file_ofs;
 	bool success = false;
 	int i;
+
+	/*
+	* give title
+	*/
+
+	char *p;
+	char *next_p;
+	p = strtok_r(file_name, " ", &next_p);
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -375,7 +368,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (p);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -453,72 +446,145 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-
-
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
-	 
 	//1. 공백 기준으로 쪼개기.
 
 	// process_exec("grep foo bar")
 	// /bin/ls -l foo bar
+	// args-multiple some arguments for you!가 인풋일수도 있겠다.
 	
 	int argc = 0;
 	char *argv[128];
 	
-	char *p;
-	char *next_p;
+//	char *p;
+//	char *next_p;
 
-	// char file_arr[1024];
+	// char file_arr[1024]; //못잊어..
 
-    // for(int i = 0; i<sizeof(file_name) ; i++){
+    // for(int i = 0; i<strlen(file_name) ; i++){
     //     file_arr[i] = file_name[i];
     // }
 
-	p = strtok_r(file_name, " ", &next_p); //\0 붙여서 return
-	if (p != NULL) {
-		p = strtok_r(NULL, " ", &next_p);
+	// p = strtok_r(file_name, " ", &next_p); //\0 붙여서 return
+//	if (p != NULL) {
+		// p = strtok_r(file_name, " ", &next_p);
 
 		while (p != NULL) {
 			argv[argc] = p;
 			argc++;
 			p = strtok_r(NULL, " ", &next_p);
 		}
-	}
+//	}
 	
+
 	//2. Place the words at the top of the stack.
-	void *stack_pointer;
-	stack_pointer = USER_STACK;
+	// stack_pointer = if_->rsp
+	// ver 1
+	// if_->rsp = USER_STACK;
+	// for (int i = argc-1; i >=0; i--) {
+	// 	*(char **)(if_->rsp) = argv[i];
+	// 	if_->rsp -= strlen(argv[i]);
+	// }
 	
-	for (int i = 0; i < argc; i++) {
-		*(char *)stack_pointer = *argv[i];
-		stack_pointer -= sizeof(*argv[i]);
+	// ver 2
+	// if_->rsp = USER_STACK;
+	// for (int i = argc-1; i >=0; i--) {
+	// 	for(int j = 0; j < sizeof(*argv[i]); j++){
+	// 		*(char *)(if_->rsp) = argv[i][j];
+	// 		(if_->rsp)--;
+	// 	}
+	// }
+
+	//ver 3
+	if_->rsp = USER_STACK;
+	for (int i = argc-1; i >=0; i--) {
+		*(char **)(if_->rsp) = argv[i];
+		if_->rsp -= sizeof(argv[i]);
+	}
+	// 3. Push the address of each string plus a null pointer sentinel,right-to-left order.
+	// 3-1. world align for multiple of 8
+	// int size_of_word_align = 0;
+	// if (if_->rsp % 8 != 0) {
+	// 	size_of_word_align = 8 - if_->rsp % 8;
+	// }
+
+	// if_->rsp into stack_ptr
+	int size_of_word_align = 0;
+	if (if_->rsp % 8 != 0) {
+		size_of_word_align = 8 - if_->rsp % 8;
 	}
 
-	//3. Push the address of each string plus a null pointer sentinel,right-to-left order.
-	void *pointer_for_argv = stack_pointer;
-	int length_of_comments = USER_STACK - (int)stack_pointer;
-	int size = 8 - length_of_comments%8;
-	if (length_of_comments % 8 !=0) {
-		for (int i = 0; i<size ; i++){
-			*( uint8_t *)stack_pointer = (uint8_t) 0;
-			stack_pointer -= 1;
-		}
+	// ver 1
+	// uint8_t word_align[size_of_word_align];//c++에서 프로세스 종료 유발
+	// for (int i=0; i++; i<size_of_word_align) {
+	// 	word_align[i] = (uint8_t)0;
+	// }
+	// *(uint8_t **)(if_->rsp) = word_align;
+
+	// ver 2
+	// for (int i = 0; i < size_of_word_align; i++) {
+	// 		*(uint8_t *)if_->rsp = (uint8_t)0;
+	// 		if_->rsp -= 1;
+	// }
+
+	// ver 2 - stack_ptr
+		for (int i = 0; i < size_of_word_align; i++) {
+			*(uint8_t *)if_->rsp = (uint8_t)0;
+			if_->rsp -= 1;
 	}
 
-	*(char *)stack_pointer = 0;
-	stack_pointer -= sizeof(char *);
+	// 구버전
+	// void *pointer_for_argv = stack_pointer;
+	// int length_of_comments = USER_STACK - (int)stack_pointer;
+	// int size = 8 - length_of_comments%8;
+	// if (length_of_comments % 8 !=0) {
+	// 	for (int i = 0; i<size ; i++){
+	// 		*( uint8_t *)stack_pointer = (uint8_t) 0;
+	// 		stack_pointer -= 1;
+	// 	}
+	// }
 
-	for (int i = argc-1; i >= 0; i--) {
-		pointer_for_argv -= sizeof(*argv[i]);
-		*(char *)stack_pointer = (char *)pointer_for_argv;
-		stack_pointer -= sizeof(char *);
+	// 3-2. null sentinel
+	*(char **)(if_->rsp) = argv[argc]; 
+	if_->rsp -= sizeof(char *);
+
+	// *(char *)stack_pointer = 0;
+	// stack_pointer -= sizeof(char *);
+
+	
+	// 3-3 point words
+	uintptr_t ptr_for_argument = USER_STACK;
+	for (int i = argc-1; i>=0; i--) {
+		*(char **)(if_->rsp) = (char *)ptr_for_argument;
+		if_->rsp -= sizeof(char *);
+		ptr_for_argument -= sizeof(argv[i]);
 	}
+	
+
+	// for (int i = argc-1; i >= 0; i--) {
+	// 	pointer_for_argv -= sizeof(*argv[i]);
+	// 	*(char *)stack_pointer = (char *)pointer_for_argv;
+	// 	stack_pointer -= sizeof(char *);
+	// }
+	
+	// for (int i = 0; i < argc; i++) {
+	// 	*(char *)stack_pointer = *argv[i];
+	// 	stack_pointer -= sizeof(*argv[i]);
+	// }
+	
 
 	//4. Point %rsi to argv (the address of argv[0]) and set %rdi to argc.
+	if_->R.rsi = if_->rsp - sizeof(char *);
+	if_->R.rdi = (uint64_t)&argc;
 	
+
 	//5. push fake "return address"
+	// rsp 끝부분에 fake address 삽입.
+	*(int **)if_->rsp = 0;
+
+	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
 
 	success = true;
 
