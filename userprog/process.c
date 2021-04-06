@@ -354,12 +354,20 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/*
-	* give title
+	* initialize variable
 	*/
-
+	
 	char *p;
 	char *next_p;
+	int argc = 0;
+	char *argv[128];
 	p = strtok_r(file_name, " ", &next_p);
+
+	while (p != NULL) {
+		argv[argc] = p;
+		argc++;
+		p = strtok_r(NULL, " ", &next_p);
+	}
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -368,7 +376,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (p);
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -431,7 +439,7 @@ load (const char *file_name, struct intr_frame *if_) {
 					}
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
-						goto done;
+						goto done; //page==NULL 또는 READ_ONLY에 write시도
 				}
 				else
 					goto done;
@@ -455,11 +463,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	// /bin/ls -l foo bar
 	// args-multiple some arguments for you!가 인풋일수도 있겠다.
 	
-	int argc = 0;
-	char *argv[128];
-	
-//	char *p;
-//	char *next_p;
 
 	// char file_arr[1024]; //못잊어..
 
@@ -471,11 +474,11 @@ load (const char *file_name, struct intr_frame *if_) {
 //	if (p != NULL) {
 		// p = strtok_r(file_name, " ", &next_p);
 
-		while (p != NULL) {
-			argv[argc] = p;
-			argc++;
-			p = strtok_r(NULL, " ", &next_p);
-		}
+		// while (p != NULL) {
+		// 	argv[argc] = p;
+		// 	argc++;
+		// 	p = strtok_r(NULL, " ", &next_p);
+		// }
 //	}
 	
 
