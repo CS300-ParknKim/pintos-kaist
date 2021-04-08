@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define _CRT_SECURE_NO_WARNINGS 
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
@@ -23,14 +22,9 @@
 #include "vm/vm.h"
 #endif
 
-/*
- * our code
- */
-// for argument passing
-#define COMMAND_SIZE 1024
-
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
+// void stack_argument(char **argv, int argc, struct intr_frame* if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
@@ -47,7 +41,6 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	printf("process_create_initd\n");
 	char *fn_copy;
 	tid_t tid;
 
@@ -59,13 +52,7 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* Create a new thread to execute FILE_NAME. */
-	//ex ) ls -l .c -> (ls, PRI_DEFAULT, initd, ls -l .c(fn_copy에 저장됨))
-	// now: thread_create(ls -l .c, PRI_DEFAULT, ~, ~)
-	char *p;
-	char *next_p;
-	p = strtok_r(file_name, " ", &next_p);
-
-	tid = thread_create (p, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -106,21 +93,28 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kern_vaddr(parent->pm14)) return false; //end pml4_for_each loop
+
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
 
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
-
+	/* 3. TODO: Allocate new PAL_USER page for the child
+	 *    TODO: and set result to NEWPAGE. */
+	
+	newpage = palloc_get_page(PAL_USER);
+	
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte); //pte를 어케아나
+	
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. TODO: if fail to insert page, do error handling. TID_ERROR*/
+		return false;
 	}
 	return true;
 }
@@ -161,32 +155,26 @@ __do_fork (void *aux) {
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+	 * TODO:       the resources of parent.
+	 * */
 
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_); // CPU jump to RIP address
+		do_iret (&if_);
 error:
 	thread_exit ();
 }
 
-
 /* Switch the current execution context to the f_name.
-goal : grep(foo, bar)
-_start (int argc, char *argv[]) {
-    exit (main (argc, argv));
-}
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
-	printf("process_exec\n");
 	char *file_name = f_name;
 	bool success;
 
 	/* We cannot use the intr_frame in the thread structure.
-	 * 여기서 stack memory를 다루는건 아니었음
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
 	struct intr_frame _if;
@@ -206,7 +194,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* Start switched process. */
-	do_iret (&_if); // CPU jump to RIP address
+	do_iret (&_if);
 	NOT_REACHED ();
 }
 
@@ -225,9 +213,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	printf("process_wait\n");
-	while(true){	}
-	return -1;//pintos 종료
+	while(1) {}
+	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -339,13 +326,13 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	printf("process_load\n");
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -353,21 +340,24 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
-	/*
-	* initialize variable
-	*/
-	
+
 	char *p;
 	char *next_p;
 	int argc = 0;
 	char *argv[128];
 	p = strtok_r(file_name, " ", &next_p);
 
+	printf("argument parsing\n");
 	while (p != NULL) {
 		argv[argc] = p;
+		printf("argv[%d]: ", argc);
+		printf(argv[argc]);
+		printf("\n");
 		argc++;
 		p = strtok_r(NULL, " ", &next_p);
 	}
+
+
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -439,7 +429,7 @@ load (const char *file_name, struct intr_frame *if_) {
 					}
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
-						goto done; //page==NULL 또는 READ_ONLY에 write시도
+						goto done;
 				}
 				else
 					goto done;
@@ -456,138 +446,61 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
-	//1. 공백 기준으로 쪼개기.
-
-	// process_exec("grep foo bar")
-	// /bin/ls -l foo bar
-	// args-multiple some arguments for you!가 인풋일수도 있겠다.
-	
-
-	// char file_arr[1024]; //못잊어..
-
-    // for(int i = 0; i<strlen(file_name) ; i++){
-    //     file_arr[i] = file_name[i];
-    // }
-
-	// p = strtok_r(file_name, " ", &next_p); //\0 붙여서 return
-//	if (p != NULL) {
-		// p = strtok_r(file_name, " ", &next_p);
-
-		// while (p != NULL) {
-		// 	argv[argc] = p;
-		// 	argc++;
-		// 	p = strtok_r(NULL, " ", &next_p);
-		// }
-//	}
-	
+	uintptr_t ptr_for_argument = USER_STACK;
 
 	//2. Place the words at the top of the stack.
-	// stack_pointer = if_->rsp
-	// ver 1
-	// if_->rsp = USER_STACK;
-	// for (int i = argc-1; i >=0; i--) {
-	// 	*(char **)(if_->rsp) = argv[i];
-	// 	if_->rsp -= strlen(argv[i]);
-	// }
-	
-	// ver 2
-	// if_->rsp = USER_STACK;
-	// for (int i = argc-1; i >=0; i--) {
-	// 	for(int j = 0; j < sizeof(*argv[i]); j++){
-	// 		*(char *)(if_->rsp) = argv[i][j];
-	// 		(if_->rsp)--;
-	// 	}
-	// }
-
-	//ver 3
-	if_->rsp = USER_STACK;
+	printf("step 2\n");
 	for (int i = argc-1; i >=0; i--) {
-		*(char **)(if_->rsp) = argv[i];
-		if_->rsp -= sizeof(argv[i]);
+		for(int j = strlen(argv[i]); j >= 0; j--){
+			(if_->rsp)--;
+			
+			*(char *)(if_->rsp) = argv[i][j];
+		}
+		printf("adrees of argv[%d] : %x\n", i,if_->rsp);
 	}
+
+	//foo bar -> foo\0 bar\0
+
 	// 3. Push the address of each string plus a null pointer sentinel,right-to-left order.
-	// 3-1. world align for multiple of 8
-	// int size_of_word_align = 0;
-	// if (if_->rsp % 8 != 0) {
-	// 	size_of_word_align = 8 - if_->rsp % 8;
-	// }
-
-	// if_->rsp into stack_ptr
+	printf("step3\n");
 	int size_of_word_align = 0;
-	if (if_->rsp % 8 != 0) {
-		size_of_word_align = 8 - if_->rsp % 8;
-	}
-
-	// ver 1
-	// uint8_t word_align[size_of_word_align];//c++에서 프로세스 종료 유발
-	// for (int i=0; i++; i<size_of_word_align) {
-	// 	word_align[i] = (uint8_t)0;
-	// }
-	// *(uint8_t **)(if_->rsp) = word_align;
-
-	// ver 2
-	// for (int i = 0; i < size_of_word_align; i++) {
-	// 		*(uint8_t *)if_->rsp = (uint8_t)0;
-	// 		if_->rsp -= 1;
-	// }
-
-	// ver 2 - stack_ptr
-		for (int i = 0; i < size_of_word_align; i++) {
-			*(uint8_t *)if_->rsp = (uint8_t)0;
+	size_of_word_align = if_->rsp % 8;
+	for (int i = 0; i < size_of_word_align; i++) {
 			if_->rsp -= 1;
+			*(uint8_t *)if_->rsp = (uint8_t)0;
 	}
+	printf("after align : address = %d\n", if_->rsp%8);
 
-	// 구버전
-	// void *pointer_for_argv = stack_pointer;
-	// int length_of_comments = USER_STACK - (int)stack_pointer;
-	// int size = 8 - length_of_comments%8;
-	// if (length_of_comments % 8 !=0) {
-	// 	for (int i = 0; i<size ; i++){
-	// 		*( uint8_t *)stack_pointer = (uint8_t) 0;
-	// 		stack_pointer -= 1;
-	// 	}
-	// }
-
-	// 3-2. null sentinel
-	*(char **)(if_->rsp) = argv[argc]; 
+	// // 3-2. null sentinel
 	if_->rsp -= sizeof(char *);
+	*(char **)(if_->rsp) = NULL;
 
-	// *(char *)stack_pointer = 0;
-	// stack_pointer -= sizeof(char *);
 
-	
 	// 3-3 point words
-	uintptr_t ptr_for_argument = USER_STACK;
 	for (int i = argc-1; i>=0; i--) {
-		*(char **)(if_->rsp) = (char *)ptr_for_argument;
 		if_->rsp -= sizeof(char *);
-		ptr_for_argument -= sizeof(argv[i]);
+		ptr_for_argument -= strlen(argv[i])+1;
+		*(char **)(if_->rsp) = ptr_for_argument;
+		printf("adrees of argv[%d] : %x\n", i,*(char **)(if_->rsp));
 	}
-	
 
-	// for (int i = argc-1; i >= 0; i--) {
-	// 	pointer_for_argv -= sizeof(*argv[i]);
-	// 	*(char *)stack_pointer = (char *)pointer_for_argv;
-	// 	stack_pointer -= sizeof(char *);
-	// }
-	
-	// for (int i = 0; i < argc; i++) {
-	// 	*(char *)stack_pointer = *argv[i];
-	// 	stack_pointer -= sizeof(*argv[i]);
-	// }
-	
 
 	//4. Point %rsi to argv (the address of argv[0]) and set %rdi to argc.
-	if_->R.rsi = if_->rsp - sizeof(char *);
+	printf("step 4\n");
+	if_->R.rsi = ptr_for_argument;
 	if_->R.rdi = (uint64_t)&argc;
 	
-
-	//5. push fake "return address"
-	// rsp 끝부분에 fake address 삽입.
+	// //5. push fake "return address"/
+	if_->rsp -= sizeof(int *);
 	*(int **)if_->rsp = 0;
 
+	printf("before hex\n");
+
+	// hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
 	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
+
+	printf("after hex\n");
+
 
 	success = true;
 
@@ -596,6 +509,7 @@ done:
 	file_close (file);
 	return success;
 }
+
 
 
 /* Checks whether PHDR describes a valid, loadable segment in
