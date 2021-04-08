@@ -1,3 +1,8 @@
+/*
+사용자 프로세스가 권한이 있거나 금지 된 작업을 수행하면 커널에 exception또는 fault. 
+현재 모든 예외는 단순히 메시지를 인쇄하고 프로세스를 종료합니다. 
+전부는 아니지만 일부 프로젝트 2의 솔루션 page_fault()은이 파일에서 수정해야 합니다.
+*/
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>

@@ -119,10 +119,11 @@ sema_up (struct semaphore *sema) {
 	/******************************************
 	 * our code: priority preemption
 	 * *****************************************/
-	yield_according_to_priority();
-
+	if (!intr_context())
+		yield_according_to_priority();
 
 	intr_set_level (old_level);
+
 }
 
 // compare semaphore priority

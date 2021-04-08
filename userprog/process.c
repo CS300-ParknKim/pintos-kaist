@@ -24,6 +24,7 @@
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
+// void stack_argument(char **argv, int argc, struct intr_frame* if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
@@ -92,21 +93,28 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kern_vaddr(parent->pm14)) return false; //end pml4_for_each loop
+
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
 
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
-
+	/* 3. TODO: Allocate new PAL_USER page for the child
+	 *    TODO: and set result to NEWPAGE. */
+	
+	newpage = palloc_get_page(PAL_USER);
+	
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte); //pte를 어케아나
+	
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. TODO: if fail to insert page, do error handling. TID_ERROR*/
+		return false;
 	}
 	return true;
 }
@@ -147,7 +155,8 @@ __do_fork (void *aux) {
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+	 * TODO:       the resources of parent.
+	 * */
 
 	process_init ();
 
@@ -204,6 +213,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1) {}
 	return -1;
 }
 
@@ -316,6 +326,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
@@ -329,6 +340,25 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+
+	char *p;
+	char *next_p;
+	int argc = 0;
+	char *argv[128];
+	p = strtok_r(file_name, " ", &next_p);
+
+	printf("argument parsing\n");
+	while (p != NULL) {
+		argv[argc] = p;
+		printf("argv[%d]: ", argc);
+		printf(argv[argc]);
+		printf("\n");
+		argc++;
+		p = strtok_r(NULL, " ", &next_p);
+	}
+
+
+
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -336,7 +366,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -416,6 +446,61 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	uintptr_t ptr_for_argument = USER_STACK;
+
+	//2. Place the words at the top of the stack.
+	printf("step 2\n");
+	for (int i = argc-1; i >=0; i--) {
+		for(int j = strlen(argv[i]); j >= 0; j--){
+			(if_->rsp)--;
+			
+			*(char *)(if_->rsp) = argv[i][j];
+		}
+		printf("adrees of argv[%d] : %x\n", i,if_->rsp);
+	}
+
+	//foo bar -> foo\0 bar\0
+
+	// 3. Push the address of each string plus a null pointer sentinel,right-to-left order.
+	printf("step3\n");
+	int size_of_word_align = 0;
+	size_of_word_align = if_->rsp % 8;
+	for (int i = 0; i < size_of_word_align; i++) {
+			if_->rsp -= 1;
+			*(uint8_t *)if_->rsp = (uint8_t)0;
+	}
+	printf("after align : address = %d\n", if_->rsp%8);
+
+	// // 3-2. null sentinel
+	if_->rsp -= sizeof(char *);
+	*(char **)(if_->rsp) = NULL;
+
+
+	// 3-3 point words
+	for (int i = argc-1; i>=0; i--) {
+		if_->rsp -= sizeof(char *);
+		ptr_for_argument -= strlen(argv[i])+1;
+		*(char **)(if_->rsp) = ptr_for_argument;
+		printf("adrees of argv[%d] : %x\n", i,*(char **)(if_->rsp));
+	}
+
+
+	//4. Point %rsi to argv (the address of argv[0]) and set %rdi to argc.
+	printf("step 4\n");
+	if_->R.rsi = ptr_for_argument;
+	if_->R.rdi = (uint64_t)&argc;
+	
+	// //5. push fake "return address"/
+	if_->rsp -= sizeof(int *);
+	*(int **)if_->rsp = 0;
+
+	printf("before hex\n");
+
+	// hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
+	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
+
+	printf("after hex\n");
+
 
 	success = true;
 
@@ -424,6 +509,7 @@ done:
 	file_close (file);
 	return success;
 }
+
 
 
 /* Checks whether PHDR describes a valid, loadable segment in
