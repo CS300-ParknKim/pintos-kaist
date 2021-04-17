@@ -66,6 +66,10 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
+<<<<<<< HEAD
+=======
+		struct thread *curr = thread_current();
+>>>>>>> origin/proj2/100
 		list_insert_ordered (&sema->waiters, &thread_current ()->elem, compare_p_prior_to_q, 0);
 		thread_block ();
 	}
@@ -119,7 +123,12 @@ sema_up (struct semaphore *sema) {
 	/******************************************
 	 * our code: priority preemption
 	 * *****************************************/
+<<<<<<< HEAD
 	yield_according_to_priority();
+=======
+	if (!intr_context())
+		yield_according_to_priority();
+>>>>>>> origin/proj2/100
 
 
 	intr_set_level (old_level);

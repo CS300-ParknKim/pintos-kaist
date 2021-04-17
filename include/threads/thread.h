@@ -9,6 +9,8 @@
 #include "vm/vm.h"
 #endif
 
+#include "filesys/file.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -30,6 +32,10 @@ typedef int tid_t;
 #define NICE_DEFAULT 0					/* default nice value*/
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
+
+// for file
+#define OPEN_MAX 128
+
 
 /* A kernel thread or user process.
  *
@@ -88,6 +94,13 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+
+// struct wait_stat{
+// 	tid_t tid;
+// 	bool is_wait;
+// 	struct list_elem wait_elem;
+// }
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -121,6 +134,54 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+
+	// our code
+
+	/* exit 호출시 thread에 부여됨 */
+	int exit_status;
+	// 프로세스 load 잘 됬나
+	bool load_status;
+	/* 프로세스 종료 여부 확인 */
+	bool terminate_status;
+	/* wait 세마포어. */
+	struct semaphore wait_sema; // 현재 쓰레드 wait시 자식꺼 다운시켜서 대기
+	/* exit 세마포어 */
+	struct semaphore delay_break_sema; // exit 시 부모랑 연관 끊어지는거 잠시 대기
+	/* 부모 프로세스의 디스크립터 */
+	// is_wait status 필요할때 사용
+	struct thread *parent_thread;
+
+	// struct wait_stat W;
+	
+	// fork시 child_thread->elem을 넣고 elem 통해 wait_tid 이용
+	struct list child_list;
+	struct list_elem child_elem;
+	// who this thread wait
+	tid_t wait_tid;
+
+	// for fork
+	struct semaphore fork_sema;
+	
+	// /* 프로세스의 프로그램 메모리 적재 유무 */
+	/* load 세마포어 */
+	struct semaphore load_sema;
+	/*
+	 * for file
+	 */
+	struct list fd_table;
+	int next_fd;
+	struct file *exec_file; // 여러파일 저장 필요할시 list로 재구현
+
+	struct intr_frame *for_fork_if;
+
+	/* Note below file struct
+	 * struct file 
+	 * struct inode *inode;  File's inode.
+	 * off_t pos;            Current position
+	 * bool deny_write;      Has file_deny_write() been called?
+	 */
+
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

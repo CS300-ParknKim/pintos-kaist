@@ -27,7 +27,7 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
-// 주석
+
 /*
  *  sleep_list          
  */
@@ -415,6 +415,35 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	#ifdef USERPROG
+		struct thread *parent = thread_current();
+		/* wait 세마포어 0으로 초기화 */
+		sema_init(&t->wait_sema, 0);
+		// delay break sema 0으로 초기화
+		sema_init(&t->delay_break_sema, 0);
+		/* load 세마포어 0으로 초기화 */
+		sema_init(&t->load_sema, 0);
+		// for sema 0으로
+		sema_init(&t->fork_sema, 0);
+		/* 부모 프로세스 저장 */ //꼭 돌려놓기
+		t->parent_thread = parent;
+		/* 프로그램이 로드되지 않음 */
+		t->load_status = false;
+		/* 프로세스가 종료되지 않음 */
+		t->terminate_status = false;
+		/* 자식 리스트에 추가 */
+		list_push_back(&parent->child_list, &t->child_elem);
+		
+
+		/*
+		 * for file
+		 */
+		t -> next_fd = 2;
+		list_init(&t -> fd_table);
+		
+
+	#endif
+
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -672,6 +701,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	t -> nice = NICE_DEFAULT;
 	t -> recent_cpu = RECENT_CPU_DEFAULT;
+
+	// User program struct initailize
+
+	#ifdef USERPROG
+		list_init(&t-> child_list);
+	#endif
 
 }
 
