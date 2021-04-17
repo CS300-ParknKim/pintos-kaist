@@ -4,6 +4,9 @@
 #include "filesys/off_t.h"
 
 struct inode;
+//My code
+//bool file_unable_write(struct file *file);
+// int file_unable_write(struct file *file);
 
 /* Opening and closing files. */
 struct file *file_open (struct inode *);

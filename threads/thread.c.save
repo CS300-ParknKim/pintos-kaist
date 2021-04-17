@@ -140,16 +140,15 @@ void go_sleep_thread(int64_t ticks){
 
 // make thread wake up
 void wakeup_thread(int64_t ticks){
-	next_wakeup_tick = INT64_MAX;
+	//next_wakeup_tick = INT64_MAX;
 	for (struct list_elem *ele = list_begin(&sleep_list); ele != list_end(&sleep_list);) {
 		struct thread *t = list_entry(ele, struct thread, elem);
-		int wakeup_tick_t = t -> wakeup_tick;
-		if(ticks >= wakeup_tick_t){
+		if(ticks >= t->wakeup_tick){
 			ele = list_remove(&t->elem);
 			thread_unblock(t);
 		} else {
 			ele = list_next(ele);
-			update_next_wakeup_tick(wakeup_tick_t);
+			update_next_wakeup_tick(t->wakeup_tick);
 		}
 	}
 }
@@ -415,35 +414,6 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	#ifdef USERPROG
-		struct thread *parent = thread_current();
-		/* wait 세마포어 0으로 초기화 */
-		sema_init(&t->wait_sema, 0);
-		// delay break sema 0으로 초기화
-		sema_init(&t->delay_break_sema, 0);
-		/* load 세마포어 0으로 초기화 */
-		sema_init(&t->load_sema, 0);
-		// for sema 0으로
-		sema_init(&t->fork_sema, 0);
-		/* 부모 프로세스 저장 */ //꼭 돌려놓기
-		t->parent_thread = parent;
-		/* 프로그램이 로드되지 않음 */
-		t->load_status = false;
-		/* 프로세스가 종료되지 않음 */
-		t->terminate_status = false;
-		/* 자식 리스트에 추가 */
-		list_push_back(&parent->child_list, &t->child_elem);
-		
-
-		/*
-		 * for file
-		 */
-		t -> next_fd = 2;
-		list_init(&t -> fd_table);
-		
-
-	#endif
-
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -701,12 +671,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	t -> nice = NICE_DEFAULT;
 	t -> recent_cpu = RECENT_CPU_DEFAULT;
-
-	// User program struct initailize
-
-	#ifdef USERPROG
-		list_init(&t-> child_list);
-	#endif
 
 }
 

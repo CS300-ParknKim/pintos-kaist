@@ -6,9 +6,17 @@
 /* An open file. */
 struct file {
 	struct inode *inode;        /* File's inode. */
-	off_t pos;                  /* Current position. */
+	off_t pos;                  /* Current position. indicate next offset 
+									into file to read or write*/
 	bool deny_write;            /* Has file_deny_write() been called? */
 };
+
+// 임의로 만든 함수
+// int
+// file_unable_write(struct file *file){
+// 	ASSERT(file != NULL);
+// 	return (int)file->deny_write;
+// }
 
 /* Opens a file for the given INODE, of which it takes ownership,
  * and returns the new file.  Returns a null pointer if an
