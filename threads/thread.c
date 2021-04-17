@@ -27,7 +27,7 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
-
+// 주석
 /*
  *  sleep_list          
  */
@@ -390,7 +390,7 @@ thread_print_stats (void) {
 tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
-	struct thread *t;
+	struct thread *t; //TCB 어쩌고 하셨는데 모르겠다
 	tid_t tid;
 
 	ASSERT (function != NULL);
@@ -406,8 +406,9 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	// R은 general purpose register이다. 
 	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
+	t->tf.R.rdi = (uint64_t) function; // first paprameter is funtion이라고 하심
 	t->tf.R.rsi = (uint64_t) aux;
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
@@ -445,7 +446,7 @@ thread_create (const char *name, int priority,
 	#endif
 
 	/* Add to run queue. */
-	thread_unblock (t);
+	thread_unblock (t); // 스케줄되기를 기다림
 
 	// yield according to priority
 	yield_according_to_priority();
@@ -690,6 +691,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	memset (t, 0, sizeof *t);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
+
+	// 'Kernel level' stack size determinded here
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;

@@ -117,14 +117,8 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-<<<<<<< HEAD
-	//if(is_kern_pte(pml4e_walk(parent->pml4, va, 0))) {
-	if(is_kern_pte(pte)){
-=======
-	if(is_kernel_vaddr(va)) {
->>>>>>> origin/proj2/100
-		return true; //end pml4_for_each loop. NOT FALSE
-	}
+	if(is_kern_vaddr(parent->pm14)) return false; //end pml4_for_each loop
+
 
 
 	/* 2. Resolve VA from the parent's page map level 4. */
@@ -141,7 +135,6 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	memcpy(newpage, parent_page, PGSIZE);
 	// pte = pml4e_walk (parent->pml4, va, 0);//get_page에서 이렇게 pte 얻음
 	writable = is_writable(pte);
-	
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
@@ -193,14 +186,6 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.
 	 * */
-
-	
-	// 경연 추가 코드 - 이상하면 없애자
-	// if_.R.rax = 0;
-	
-
-	// memcpy(&current->fd_table, &parent->fd_table, sizeof (parent->fd_table));
-
 	struct list_elem *e = list_begin(&parent->fd_table);
 	
 	// 나중에 좀 고쳐지면 file lock 추가
@@ -315,7 +300,6 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 
-
 	struct thread *curr = thread_current();
 	// 직접 연결된 쓰레드인가?
 	struct thread *child = NULL;
@@ -340,6 +324,7 @@ process_wait (tid_t child_tid UNUSED) {
 	
 	// while(1) {}
 	// return -1;//terminated by the kernel
+
 }
 
 /* Exit the process. This function is called by thread_exit (). 
@@ -529,6 +514,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *argv[128];
 	p = strtok_r(file_name, " ", &next_p);
 
+
 	while (p != NULL) {
 		argv[argc] = p;
 		argc++;
@@ -654,7 +640,6 @@ load (const char *file_name, struct intr_frame *if_) {
 			if_->rsp -= 1;
 			*(uint8_t *)if_->rsp = (uint8_t)0;
 	}
-
 	// 3-2. null sentinel
 	if_->rsp -= sizeof(char *);
 	*(char **)(if_->rsp) = NULL;
@@ -663,7 +648,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	// 3-3 point words
 	for (int i = argc-1; i>=0; i--) {
 		if_->rsp -= sizeof(char *);
-
 		ptr_for_argument -= strlen(argv[i])+1; 
 		*(char **)(if_->rsp) = ptr_for_argument;
 	}

@@ -39,6 +39,7 @@ void syscall_handler (struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+
 //#define VALIDITY_CHECK(X) (!is_kernel_vaddr(X)) && (X != NULL) && is_user_vaddr(X)
 
 // The kernel must be very careful about doing so, 
@@ -147,19 +148,20 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	//null pointer/unmapped virtual memory/pointer to kernel virtual address space (above KERN_BASE)
 	if (f->R.rax == SYS_HALT)
 		halt();
+
 	else {
 		uint64_t first_var = f->R.rdi; // copy to keep from TOCTOU attack
 		uint64_t second_var = f->R.rsi; // copy to keep from TOCTOU attack
 		uint64_t third_var = f->R.rdx; // copy to keep from TOCTOU attack
 
 		valid_check(first_var);
-			
 		switch (f->R.rax)
 		{
 		case SYS_EXIT:
 			exit(first_var);
 			break;
 		case SYS_FORK:
+
 			thread_current()->for_fork_if = f;
 			f->R.rax = fork(first_var);
 			break;
@@ -170,6 +172,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = wait(first_var);
 			break;
 		case SYS_CREATE:
+
 			// if (!valid_check(second_var)) exit(-1);
 			valid_check(second_var);
 			f->R.rax = create(first_var, second_var);
@@ -178,7 +181,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = remove(first_var);
 			break;
 		case SYS_OPEN:
-			// return이  없을때는?
 			f->R.rax = open(first_var);
 			break;
 		case SYS_FILESIZE:
@@ -474,25 +476,4 @@ void close (int fd){
  * These provide a way for user processes to invoke each system call from a C program. 
  * Each uses a little inline assembly code to invoke the system call and (if appropriate) returns the system call's return value
 */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -5,7 +5,6 @@
 #include <debug.h>
 #include <stddef.h>
 
-
 #include "filesys/file.h"
 #include <list.h>
 #include "threads/thread.h"
@@ -40,6 +39,7 @@ int wait (pid_t pid);
 bool create (const char *file, unsigned initial_size);//
 bool remove (const char *file);//
 int open (const char *file);//
+
 int filesize (int fd);
 int read (int fd, void *buffer, unsigned length);
 int write (int fd, const void *buffer, unsigned length);
